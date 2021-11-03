@@ -1,10 +1,10 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useCallback, useRef, useState} from 'react';
 import CanvasDraw from "react-canvas-draw";
 import {ClayCheckbox} from '@clayui/form';
 import ClayColorPicker from '@clayui/color-picker';
 import ClayButton from "@clayui/button";
 import ClayIcon from '@clayui/icon';
-import {ClayInput} from '@clayui/form';
+import {ClayInput, ClaySelect} from '@clayui/form';
 import ClayLayout from "@clayui/layout";
 import ClayList from '@clayui/list';
 
@@ -16,11 +16,21 @@ const remoteAppClient = new window.__LIFERAY_REMOTE_APP_SDK__.Client({debug: tru
 
 function App() {
 	const canvasDrawRef = useRef();
+	const canvasResultRef = useRef();
 
 	const [brushColor, setBrushColor] = useState('#000000');
+	const [documents, setDocuments] = useState();
 	const [hideGrid, setHideGrid] = useState(true);
 	const [name, setName] = useState('');
+	const [selectedDocument, setSelectedDocument] = useState();
 	const [siteGroupId, setSiteGroupId] = useState();
+
+	const getDocuments = useCallback(() => {
+		remoteAppClient.fetch(
+			`/o/headless-delivery/v1.0/sites/${siteGroupId}/documents`)
+		.then((response) => response.json())
+		.then(({items}) => setDocuments(items));
+	}, [siteGroupId]);
 
 	const getSiteGroupId = () => {
 		remoteAppClient.get('siteGroupId')
@@ -36,8 +46,19 @@ function App() {
 		}
 
 		const drawingCanvas = canvasDrawRef.current.canvas.drawing;
+		const bgCanvas = canvasDrawRef.current.canvas.grid;
 
-		drawingCanvas.toBlob((blob) => {
+		const newCanvas = canvasResultRef.current;
+
+		newCanvas.setAttribute('width', drawingCanvas.getAttribute('width'));
+		newCanvas.setAttribute('height', drawingCanvas.getAttribute('height'));
+
+		const ctx = newCanvas.getContext('2d');
+
+		ctx.drawImage(bgCanvas, 0, 0);
+		ctx.drawImage(drawingCanvas, 0, 0);
+
+		newCanvas.toBlob((blob) => {
 			// Create a file with the blob
 			const file  = new File(
 				[blob],
@@ -83,15 +104,74 @@ function App() {
 		});
 	};
 
+	const handleSelectImage = (event) => {
+		const value = event.currentTarget.value;
+
+		if (value === 'choose') {
+			return;
+		}
+
+		const document = documents.find(
+			(document => document.id.toString() === value));
+
+		remoteAppClient.fetch(document.contentUrl)
+		.then((response) => response.blob())
+		.then((blob) => {
+			const url = URL.createObjectURL(blob);
+
+			setSelectedDocument({
+				...document,
+				blobURL: url
+			});
+		});
+	};
+
 	useEffect(() => {
 		getSiteGroupId();
 	}, []);
+
+	useEffect(() => {
+		if (siteGroupId) {
+			getDocuments();
+		}
+	}, [getDocuments, siteGroupId])
+
+	useEffect(() => {
+		if (selectedDocument) {
+			setName(`${selectedDocument.title}-rev`);
+		}
+	}, [selectedDocument]);
 
 	return (
 		<ClayLayout.ContainerFluid view>
 			<ClayLayout.Row>
 				<ClayLayout.Col size={3} >
 					<ClayList>
+						<ClayList.Item flex>
+							<ClayList.ItemField	className="ml-1">
+								<label htmlFor="drawingSelectImage">Select image</label>
+
+								<ClaySelect
+									id="drawingSelectImage"
+									onChange={handleSelectImage}
+								>
+									<ClaySelect.Option
+										key="choose"
+										value="choose"
+										label="Choose an image"
+									/>
+
+									{documents && documents.map((document) => (
+										<ClaySelect.Option
+											key={document.id}
+											value={document.id}
+											label={document.title}
+										/>
+									))}
+								</ClaySelect>
+							</ClayList.ItemField>
+						</ClayList.Item>
+
 						<ClayList.Item flex>
 							<ClayList.ItemField	className="ml-1">
 								<label htmlFor="drawingName">Name</label>
@@ -174,8 +254,17 @@ function App() {
 						brushColor={brushColor}
 						canvasWidth="100%"
 						hideGrid={hideGrid}
+						imgSrc={selectedDocument ? selectedDocument.blobURL : ''}
+						key={selectedDocument ? selectedDocument.title : hideGrid}
 						lazyRadius={0}
 						ref={canvasDrawRef}
+					/>
+
+					<canvas
+						ref={canvasResultRef}
+						style={{
+							display: 'none'
+						}}
 					/>
 				</ClayLayout.Col>
 			</ClayLayout.Row>
