@@ -1,4 +1,4 @@
-import React, {useRef, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import CanvasDraw from "react-canvas-draw";
 import {ClayCheckbox} from '@clayui/form';
 import ClayColorPicker from '@clayui/color-picker';
@@ -12,12 +12,22 @@ import ClayList from '@clayui/list';
 import "@clayui/css/lib/css/atlas.css";
 import spritemap from "@clayui/css/lib/images/icons/icons.svg";
 
+const remoteAppClient = new window.__LIFERAY_REMOTE_APP_SDK__.Client({debug: true});
+
 function App() {
 	const canvasDrawRef = useRef();
 
 	const [brushColor, setBrushColor] = useState('#000000');
 	const [hideGrid, setHideGrid] = useState(true);
 	const [name, setName] = useState('');
+	const [siteGroupId, setSiteGroupId] = useState();
+
+	const getSiteGroupId = () => {
+		remoteAppClient.get('siteGroupId')
+		.then((value) => {
+			setSiteGroupId(value)
+		});
+	};
 
 	const handleSave = () => {
 		if (!name || name === '') {
@@ -25,13 +35,36 @@ function App() {
 			return false;
 		}
 
-		const dataUrl = canvasDrawRef.current.canvas.drawing.toDataURL();
-		const link = document.createElement('a');
+		const drawingCanvas = canvasDrawRef.current.canvas.drawing;
 
-		link.setAttribute('download', `${name}.png`);
-		link.setAttribute('href', dataUrl);
-		link.click();
+		drawingCanvas.toBlob((blob) => {
+			// Create a file with the blob
+			const file  = new File(
+				[blob],
+				`${name}.png`,
+				{
+					type: `image/png`
+				}
+			);
+
+			const formData = new FormData();
+			formData.append('file', file);
+
+			remoteAppClient.fetch(
+				`/o/headless-delivery/v1.0/sites/${siteGroupId}/documents`, {
+					headers: {
+						'Accept': 'application/json'
+					},
+					method: 'POST',
+					body: formData,
+				}
+			);
+		});
 	};
+
+	useEffect(() => {
+		getSiteGroupId();
+	}, []);
 
 	return (
 		<ClayLayout.ContainerFluid view>
