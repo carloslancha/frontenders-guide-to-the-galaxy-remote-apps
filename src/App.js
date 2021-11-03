@@ -1,4 +1,5 @@
 import React, {useEffect, useCallback, useRef, useState} from 'react';
+import ReactDOM from 'react-dom';
 import CanvasDraw from "react-canvas-draw";
 import {ClayCheckbox} from '@clayui/form';
 import ClayColorPicker from '@clayui/color-picker';
@@ -8,11 +9,8 @@ import {ClayInput, ClaySelect} from '@clayui/form';
 import ClayLayout from "@clayui/layout";
 import ClayList from '@clayui/list';
 
-// Imports the @clayui/css package CSS
-import "@clayui/css/lib/css/atlas.css";
-import spritemap from "@clayui/css/lib/images/icons/icons.svg";
-
-const remoteAppClient = new window.__LIFERAY_REMOTE_APP_SDK__.Client({debug: true});
+const {Liferay, themeDisplay} = window;
+const spritemap = `${themeDisplay && themeDisplay.getPathThemeImages()}/lexicon/icons.svg`;
 
 function App() {
 	const canvasDrawRef = useRef();
@@ -26,17 +24,14 @@ function App() {
 	const [siteGroupId, setSiteGroupId] = useState();
 
 	const getDocuments = useCallback(() => {
-		remoteAppClient.fetch(
+		Liferay.Util.fetch(
 			`/o/headless-delivery/v1.0/sites/${siteGroupId}/documents`)
 		.then((response) => response.json())
 		.then(({items}) => setDocuments(items));
 	}, [siteGroupId]);
 
 	const getSiteGroupId = () => {
-		remoteAppClient.get('siteGroupId')
-		.then((value) => {
-			setSiteGroupId(value)
-		});
+		setSiteGroupId(themeDisplay && themeDisplay.getSiteGroupId());
 	};
 
 	const handleSave = () => {
@@ -71,7 +66,7 @@ function App() {
 			const formData = new FormData();
 			formData.append('file', file);
 
-			remoteAppClient.fetch(
+			Liferay.Util.fetch(
 				`/o/headless-delivery/v1.0/sites/${siteGroupId}/documents`, {
 					headers: {
 						'Accept': 'application/json'
@@ -83,12 +78,12 @@ function App() {
 			.then((response) => response.json())
 			.then((data) => {
 				if (data.status === 'CONFLICT') {
-					remoteAppClient.openToast({
+					Liferay.Util.openToast({
 						message: data.title,
 						type: 'danger',
 					});
 				} else {
-					remoteAppClient.openToast({
+					Liferay.Util.openToast({
 						message: 'Hurrah! Your image was uploaded',
 						type: 'success',
 					});
@@ -96,7 +91,7 @@ function App() {
 			})
 			.catch((error) => {
 				console.log(error);
-				remoteAppClient.openToast({
+				Liferay.Util.openToast({
 					message: 'An error occured uploading your document',
 					type: 'danger',
 				});
@@ -114,7 +109,7 @@ function App() {
 		const document = documents.find(
 			(document => document.id.toString() === value));
 
-		remoteAppClient.fetch(document.contentUrl)
+		Liferay.Util.fetch(document.contentUrl)
 		.then((response) => response.blob())
 		.then((blob) => {
 			const url = URL.createObjectURL(blob);
@@ -270,6 +265,24 @@ function App() {
 			</ClayLayout.Row>
 		</ClayLayout.ContainerFluid>
 	);
+}
+class GalaxyPaint extends HTMLElement {
+	connectedCallback() {
+		this.innerHTML = '<div id="galaxyContainer"></div>';
+
+    ReactDOM.render(
+			<App />,
+			document.querySelector('#galaxyContainer')
+		);
+	}
+}
+
+if (customElements.get('galaxy-paint')) {
+	console.log(
+		'Skipping registration for <galaxy-paint> (already registered)'
+	);
+} else {
+	customElements.define('galaxy-paint', GalaxyPaint);
 }
 
 export default App;
