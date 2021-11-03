@@ -58,7 +58,28 @@ function App() {
 					method: 'POST',
 					body: formData,
 				}
-			);
+			)
+			.then((response) => response.json())
+			.then((data) => {
+				if (data.status === 'CONFLICT') {
+					remoteAppClient.openToast({
+						message: data.title,
+						type: 'danger',
+					});
+				} else {
+					remoteAppClient.openToast({
+						message: 'Hurrah! Your image was uploaded',
+						type: 'success',
+					});
+				}
+			})
+			.catch((error) => {
+				console.log(error);
+				remoteAppClient.openToast({
+					message: 'An error occured uploading your document',
+					type: 'danger',
+				});
+			});
 		});
 	};
 
